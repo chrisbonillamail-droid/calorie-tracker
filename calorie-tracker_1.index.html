@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Ledger — Calorie & Protein Tracker</title>
+<style>
+  :root{
+    --ink:#14140f;
+    --paper:#faf9f4;
+    --paper-2:#f1efe6;
+    --line:#14140f;
+    --green:#1b4332;
+    --amber:#c1701a;
+    --red:#a2321f;
+    --blue:#2b4a63;
+    --muted:#6b6a5f;
+    --radius:2px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper-2);
+    color:var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    min-height:100vh;
+    padding-bottom:40px;
+  }
+  .narrow{
+    font-family: "Arial Narrow", "Helvetica Neue Condensed", -apple-system, sans-serif;
+    font-stretch: condensed;
+  }
+  header.app-header{
+    padding: max(18px, env(safe-area-inset-top)) 20px 14px;
+    display:flex; align-items:baseline; justify-content:space-between;
+    max-width:480px; margin:0 auto;
+  }
+  header.app-header h1{
+    font-size:15px; letter-spacing:2px; text-transform:uppercase; margin:0;
+    font-weight:800;
+  }
+  header.app-header .date-nav{
+    display:flex; align-items:center; gap:10px;
+    font-size:13px; color:var(--muted); font-weight:600;
+  }
+  header.app-header button.nav-btn{
+    background:none; border:none; font-size:18px; color:var(--ink);
+    padding:2px 6px; cursor:pointer; line-height:1;
+  }
+  main{max-width:480px; margin:0 auto; padding:0 16px;}
+
+  .label-card{
+    background:var(--paper);
+    border: 3px solid var(--line);
+    border-radius: var(--radius);
+    padding:14px 16px 16px;
+    margin-bottom:18px;
+  }
+  .label-title-row{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+  .label-title{
+    font-size:26px; font-weight:900; letter-spacing:-0.5px;
+    margin:0 0 2px;
+  }
+  .status-badge{
+    font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:1px;
+    padding:5px 9px; border-radius:20px; border:1.5px solid var(--ink);
+    white-space:nowrap; margin-top:4px;
+  }
+  .status-badge.cutting{background:var(--blue); color:var(--paper); border-color:var(--blue);}
+  .status-badge.excess{background:var(--red); color:var(--paper); border-color:var(--red);}
+  .status-badge.ontrack{background:var(--green); color:var(--paper); border-color:var(--green);}
+  .status-badge.none{background:transparent; color:var(--muted); border-color:var(--muted);}
+
+  .label-sub{
+    font-size:12px; color:var(--muted); margin:0 0 8px;
+    border-bottom: 8px solid var(--line);
+    padding-bottom:8px;
+  }
+  .row{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:6px 0; border-bottom:1px solid var(--ink);
+  }
+  .row.thick{border-bottom:4px solid var(--line);}
+  .row.total{border-bottom:1px solid var(--ink); padding-top:8px;}
+  .row.protein{border-bottom:none;}
+  .row .label{font-weight:700; font-size:15px;}
+  .row .val{font-weight:800; font-size:16px;}
+  .row.total .label{font-size:19px; font-weight:900;}
+  .row.total .val{font-size:26px; font-weight:900;}
+  .row.total .val.over{color:var(--red);}
+  .row.total .val.under{color:var(--green);}
+  .row.protein .label{font-size:14px; color:var(--muted); font-weight:700;}
+  .row.protein .val{font-size:15px; color:var(--blue);}
+
+  .bar-track{
+    height:10px; background:var(--paper-2); border:1px solid var(--ink); border-radius:6px;
+    overflow:hidden; margin:12px 0 6px;
+  }
+  .bar-fill{height:100%; background:var(--green); transition:width .35s ease, background .35s ease;}
+  .bar-fill.over{background:var(--red);}
+  .bar-caption{font-size:11px; color:var(--muted); text-align:right;}
+
+  .ranges{
+    display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted);
+    margin-top:2px; font-weight:600;
+  }
+
+  .settings-toggle{text-align:right; margin-top:10px;}
+  .settings-toggle button{
+    background:none; border:none; color:var(--muted); font-size:11.5px; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; padding:4px 0;
+  }
+  .settings-panel{
+    margin-top:8px; padding-top:10px; border-top:1px dashed #ccc7b3;
+    display:none;
+  }
+  .settings-panel.open{display:block;}
+  .setting-row{
+    display:flex; align-items:center; justify-content:space-between; padding:5px 0;
+    font-size:12.5px; color:var(--muted); font-weight:600;
+  }
+  .setting-row input{
+    width:66px; text-align:right; border:none; border-bottom:1px solid var(--muted);
+    background:transparent; font-size:13px; font-weight:700; color:var(--ink);
+    font-family:inherit; padding:2px 0;
+  }
+  .setting-row input:focus{outline:none; border-bottom-color:var(--ink);}
+
+  .add-card{
+    background:var(--paper); border:1px solid var(--ink); border-radius:var(--radius);
+    padding:14px; margin-bottom:18px;
+  }
+  .add-card h2{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin:0 0 10px; color:var(--muted);
+  }
+  .quick-add{margin-bottom:12px;}
+  .quick-add label{
+    display:block; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;
+    color:var(--muted); margin-bottom:5px; font-weight:700;
+  }
+  .quick-add select{
+    width:100%; font-family:inherit; border:1px solid var(--ink); border-radius:var(--radius);
+    padding:10px 10px; font-size:14.5px; background:var(--paper-2); color:var(--ink);
+    -webkit-appearance:none; appearance:none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='%2314140f' d='M5 7l5 6 5-6z'/></svg>");
+    background-repeat:no-repeat; background-position:right 10px center; background-size:16px;
+  }
+  .quick-add select:focus{outline:2px solid var(--green); outline-offset:-1px;}
+  .manage-toggle{margin:2px 0 0; text-align:right;}
+  .manage-toggle button{
+    background:none; border:none; color:var(--muted); font-size:11px; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; padding:4px 0;
+  }
+  .custom-form{
+    background:var(--paper-2); border:1px dashed var(--ink); border-radius:var(--radius);
+    padding:12px; margin-top:10px;
+  }
+  .custom-form .form-title{font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; color:var(--ink);}
+  .custom-form .add-row{margin-bottom:8px;}
+  .custom-form .form-btns{display:flex; gap:8px;}
+  .custom-form .form-btns button{
+    flex:1; padding:9px; border-radius:var(--radius); font-size:12.5px; font-weight:800;
+    text-transform:uppercase; letter-spacing:0.5px; cursor:pointer; border:1px solid var(--ink);
+  }
+  .custom-form .save-btn{background:var(--ink); color:var(--paper);}
+  .custom-form .cancel-btn{background:transparent; color:var(--ink);}
+  .custom-list{margin-top:10px;}
+  .custom-list-item{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 2px; border-bottom:1px solid #ddd9c8; font-size:13px;
+  }
+  .custom-list-item .ci-name{font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .custom-list-item .ci-macro{font-size:11px; color:var(--muted); font-weight:600;}
+  .custom-list-item .ci-actions{display:flex; gap:6px; flex-shrink:0; margin-left:8px;}
+  .custom-list-item .ci-actions button{
+    background:none; border:none; color:var(--muted); font-size:14px; padding:3px 5px; cursor:pointer;
+  }
+  .custom-list-item .ci-actions button.ci-del:active{color:var(--red);}
+  .custom-list-item .ci-actions button.ci-edit:active{color:var(--blue);}
+  .divider-word{
+    display:flex; align-items:center; gap:8px; margin:12px 0;
+    font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; font-weight:700;
+  }
+  .divider-word::before, .divider-word::after{content:""; flex:1; height:1px; background:#ddd9c8;}
+  .add-row{display:flex; gap:8px;}
+  .add-row input{
+    font-family:inherit; border:1px solid var(--ink); border-radius:var(--radius);
+    padding:10px 10px; font-size:15px; background:var(--paper-2);
+  }
+  .add-row input:focus{outline:2px solid var(--green); outline-offset:-1px;}
+  .add-row input.name{flex:1.4; min-width:0;}
+  .add-row input.cals{width:66px;}
+  .add-row input.protein{width:66px;}
+  .add-row-labels{display:flex; gap:8px; margin-top:4px;}
+  .add-row-labels span{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;}
+  .add-row-labels span.name{flex:1.4;}
+  .add-row-labels span.cals{width:66px; text-align:center;}
+  .add-row-labels span.protein{width:66px; text-align:center;}
+  .add-btn{
+    margin-top:10px; width:100%; padding:11px; background:var(--ink); color:var(--paper);
+    border:none; border-radius:var(--radius); font-size:14px; font-weight:800;
+    letter-spacing:0.5px; text-transform:uppercase; cursor:pointer;
+  }
+  .add-btn:active{opacity:0.8;}
+
+  .log-header{display:flex; justify-content:space-between; align-items:baseline; margin:0 0 8px;}
+  .log-header h2{font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin:0; color:var(--muted);}
+  .log-header .count{font-size:11px; color:var(--muted);}
+  ul.entries{list-style:none; margin:0 0 8px; padding:0;}
+  ul.entries li{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 4px; border-bottom:1px solid #ddd9c8; gap:8px;
+  }
+  ul.entries li .info{min-width:0;}
+  ul.entries li .name{font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  ul.entries li .time{font-size:11px; color:var(--muted); margin-top:2px;}
+  ul.entries li .macros{font-size:11px; color:var(--blue); margin-top:2px; font-weight:700;}
+  ul.entries li .right{display:flex; align-items:center; gap:10px; flex-shrink:0;}
+  ul.entries li .cal{font-size:15px; font-weight:800; font-variant-numeric:tabular-nums;}
+  ul.entries li button.del{
+    background:none; border:none; color:var(--muted); font-size:18px; padding:4px 6px; cursor:pointer; line-height:1;
+  }
+  ul.entries li button.del:active{color:var(--red);}
+
+  .empty{text-align:center; padding:30px 10px; color:var(--muted); font-size:13px;}
+  .empty .glyph{font-size:26px; display:block; margin-bottom:8px;}
+  .loading{text-align:center; padding:40px 10px; color:var(--muted); font-size:13px;}
+
+  .history-btn{
+    background:none; border:1px solid var(--ink); border-radius:20px;
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;
+    padding:5px 11px; cursor:pointer; color:var(--ink);
+  }
+  .history-btn:active{opacity:0.7;}
+  .month-group{margin-bottom:20px;}
+  .month-title{
+    font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px;
+    color:var(--muted); margin:0 0 6px; padding-bottom:6px; border-bottom:2px solid var(--ink);
+  }
+  .hist-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:11px 4px; border-bottom:1px solid #ddd9c8; cursor:pointer;
+  }
+  .hist-row:active{background:var(--paper);}
+  .hist-row .hd-date{font-size:14px; font-weight:700;}
+  .hist-row .hd-dow{font-size:11px; color:var(--muted); font-weight:600;}
+  .hist-row .hd-right{display:flex; align-items:center; gap:10px;}
+  .hist-row .hd-macro{font-size:11px; color:var(--muted); text-align:right;}
+  .hist-row .hd-cal{font-size:15px; font-weight:800; font-variant-numeric:tabular-nums;}
+  .hist-badge{
+    font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px;
+    padding:3px 7px; border-radius:20px; border:1.5px solid var(--ink); white-space:nowrap;
+  }
+  .hist-badge.cutting{background:var(--blue); color:var(--paper); border-color:var(--blue);}
+  .hist-badge.excess{background:var(--red); color:var(--paper); border-color:var(--red);}
+  .hist-badge.ontrack{background:var(--green); color:var(--paper); border-color:var(--green);}
+
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:6px;
+    font-size:13px; font-weight:600; opacity:0; pointer-events:none; transition:opacity .25s ease;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>Ledger</h1>
+  <div class="date-nav" id="headerRight">
+    <button class="nav-btn" id="prevDay" aria-label="Previous day">‹</button>
+    <span id="dateLabel">Today</span>
+    <button class="nav-btn" id="nextDay" aria-label="Next day">›</button>
+  </div>
+</header>
+
+<main id="main">
+  <div class="loading" id="loadingMsg">Loading your day…</div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $ = (s, el=document) => el.querySelector(s);
+  const main = $('#main');
+  const toastEl = $('#toast');
+
+  // Local storage shim — same get/set/delete/list interface as Claude's
+  // artifact storage, but backed by the browser's own localStorage so this
+  // app works completely standalone (no Claude connection required).
+  const STORAGE_PREFIX = 'ledger:';
+  const storage = {
+    async get(key){
+      const raw = localStorage.getItem(STORAGE_PREFIX + key);
+      if(raw === null) return null;
+      return {key, value: raw};
+    },
+    async set(key, value){
+      localStorage.setItem(STORAGE_PREFIX + key, value);
+      return {key, value};
+    },
+    async delete(key){
+      localStorage.removeItem(STORAGE_PREFIX + key);
+      return {key, deleted:true};
+    },
+    async list(prefix){
+      const keys = [];
+      const p = STORAGE_PREFIX + (prefix || '');
+      for(let i = 0; i < localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(k && k.startsWith(p)) keys.push(k.slice(STORAGE_PREFIX.length));
+      }
+      return {keys, prefix};
+    }
+  };
+
+  let currentDate = new Date();
+  currentDate.setHours(0,0,0,0);
+  let goal = 2000;
+  let proteinGoal = 120;
+  let cuttingLine = 1500;
+  let excessLine = 2000;
+  let entries = [];
+  let settingsOpen = false;
+  let customFoods = [];
+  let customFormOpen = false;
+  let editingCustomId = null;
+  let manageOpen = false;
+  let customEditValues = {name:'', calories:'', protein:''};
+  let view = 'log'; // 'log' | 'history'
+  let daySummaries = {}; // { 'YYYY-MM-DD': {calories, protein} }
+
+  function commonFoodsOptionsHtml(){
+    if(!customFoods.length) return '';
+    return `
+      <optgroup label="My Items">
+        ${customFoods.map(it => `<option value="${escapeHtml(it.name)}" data-cal="${it.calories}" data-protein="${it.protein}">${escapeHtml(it.name)} — ${it.calories} cal / ${it.protein}g</option>`).join('')}
+      </optgroup>
+    `;
+  }
+
+  async function loadCustomFoods(){
+    try{
+      const res = await storage.get('customFoods');
+      customFoods = (res && res.value) ? JSON.parse(res.value) : [];
+    }catch(e){
+      customFoods = [];
+    }
+  }
+  async function saveCustomFoods(){
+    try{
+      await storage.set('customFoods', JSON.stringify(customFoods));
+    }catch(e){
+      console.error('Failed to save custom foods', e);
+      showToast("Couldn't save item");
+    }
+  }
+
+  function fmtDateKey(d){
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function isToday(d){
+    const t = new Date(); t.setHours(0,0,0,0);
+    return fmtDateKey(d) === fmtDateKey(t);
+  }
+  function isYesterday(d){
+    const t = new Date(); t.setHours(0,0,0,0); t.setDate(t.getDate()-1);
+    return fmtDateKey(d) === fmtDateKey(t);
+  }
+  function dateLabel(d){
+    if(isToday(d)) return 'Today';
+    if(isYesterday(d)) return 'Yesterday';
+    return d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+  }
+  function timeLabel(iso){
+    try{ return new Date(iso).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}); }
+    catch(e){ return ''; }
+  }
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(()=> toastEl.classList.remove('show'), 1600);
+  }
+
+  async function loadSettings(){
+    try{
+      const res = await storage.get('settings');
+      if(res && res.value){
+        const s = JSON.parse(res.value);
+        if(s.goal > 0) goal = s.goal;
+        if(s.proteinGoal >= 0) proteinGoal = s.proteinGoal;
+        if(s.cuttingLine >= 0) cuttingLine = s.cuttingLine;
+        if(s.excessLine >= 0) excessLine = s.excessLine;
+      }
+    }catch(e){ /* use defaults */ }
+  }
+  async function saveSettings(){
+    try{
+      await storage.set('settings', JSON.stringify({goal, proteinGoal, cuttingLine, excessLine}));
+    }catch(e){ console.error('Failed to save settings', e); showToast("Couldn't save settings"); }
+  }
+  async function loadEntries(){
+    const key = 'entries:' + fmtDateKey(currentDate);
+    try{
+      const res = await storage.get(key);
+      entries = (res && res.value) ? JSON.parse(res.value) : [];
+      entries.forEach(e => { if(typeof e.protein !== 'number' || isNaN(e.protein)) e.protein = 0; });
+    }catch(e){
+      entries = [];
+    }
+  }
+  async function saveEntries(){
+    const key = 'entries:' + fmtDateKey(currentDate);
+    try{
+      await storage.set(key, JSON.stringify(entries));
+    }catch(e){
+      console.error('Failed to save entries', e);
+      showToast("Couldn't save — try again");
+    }
+    await updateDaySummary();
+  }
+
+  async function loadDaySummaries(){
+    try{
+      const res = await storage.get('daySummaries');
+      daySummaries = (res && res.value) ? JSON.parse(res.value) : {};
+    }catch(e){
+      daySummaries = {};
+    }
+  }
+  async function saveDaySummaries(){
+    try{
+      await storage.set('daySummaries', JSON.stringify(daySummaries));
+    }catch(e){
+      console.error('Failed to save day summaries', e);
+    }
+  }
+  async function updateDaySummary(){
+    const key = fmtDateKey(currentDate);
+    const total = entries.reduce((sum, e) => sum + e.calories, 0);
+    const totalProtein = entries.reduce((sum, e) => sum + (e.protein || 0), 0);
+    if(entries.length === 0){
+      delete daySummaries[key];
+    } else {
+      daySummaries[key] = {calories: total, protein: totalProtein};
+    }
+    await saveDaySummaries();
+  }
+
+  function statusFor(total){
+    if(total <= 0) return {cls:'none', text:'No entries'};
+    if(total > excessLine) return {cls:'excess', text:'Excess'};
+    if(total < cuttingLine) return {cls:'cutting', text:'Cutting'};
+    return {cls:'ontrack', text:'On track'};
+  }
+
+  function render(){
+    const headerRight = $('#headerRight');
+    if(view === 'log'){
+      headerRight.innerHTML = `
+        <button class="nav-btn" id="prevDay" aria-label="Previous day">‹</button>
+        <span id="dateLabel">Today</span>
+        <button class="nav-btn" id="nextDay" aria-label="Next day">›</button>
+        <button class="history-btn" id="openHistoryBtn">History</button>
+      `;
+    } else {
+      headerRight.innerHTML = `<button class="history-btn" id="closeHistoryBtn">✕ Close</button>`;
+    }
+
+    if(view === 'history'){
+      renderHistory();
+      wireHistoryEvents();
+      return;
+    }
+
+    $('#dateLabel').textContent = dateLabel(currentDate);
+    $('#nextDay').disabled = isToday(currentDate);
+    $('#nextDay').style.opacity = isToday(currentDate) ? '0.3' : '1';
+    $('#openHistoryBtn').addEventListener('click', async () => {
+      view = 'history';
+      main.innerHTML = '<div class="loading">Loading history…</div>';
+      await reconcileMissingSummaries();
+      render();
+    });
+    $('#prevDay').addEventListener('click', () => {
+      const d = new Date(currentDate); d.setDate(d.getDate() - 1); goToDate(d);
+    });
+    $('#nextDay').addEventListener('click', () => {
+      if(isToday(currentDate)) return;
+      const d = new Date(currentDate); d.setDate(d.getDate() + 1); goToDate(d);
+    });
+
+    const total = entries.reduce((sum, e) => sum + e.calories, 0);
+    const totalProtein = entries.reduce((sum, e) => sum + (e.protein || 0), 0);
+    const remaining = goal - total;
+    const pct = Math.min(100, Math.round((total / goal) * 100)) || 0;
+    const over = total > goal;
+    const status = statusFor(total);
+
+    const entriesHtml = entries.length === 0
+      ? `<div class="empty"><span class="glyph">🍽</span>Nothing logged ${isToday(currentDate) ? 'yet' : 'this day'}.<br>Add what you ate below.</div>`
+      : `<ul class="entries">
+          ${entries.slice().reverse().map(e => `
+            <li data-id="${e.id}">
+              <div class="info">
+                <div class="name">${escapeHtml(e.name)}</div>
+                <div class="time">${timeLabel(e.time)}</div>
+                ${e.protein ? `<div class="macros">${e.protein}g protein</div>` : ''}
+              </div>
+              <div class="right">
+                <span class="cal">${e.calories}</span>
+                <button class="del" data-id="${e.id}" aria-label="Delete entry">✕</button>
+              </div>
+            </li>
+          `).join('')}
+        </ul>`;
+
+    main.innerHTML = `
+      <div class="label-card">
+        <div class="label-title-row">
+          <p class="label-title narrow">Daily Intake</p>
+          <span class="status-badge ${status.cls}">${status.text}</span>
+        </div>
+        <p class="label-sub">${dateLabel(currentDate)} · Serving: 1 day</p>
+
+        <div class="row">
+          <span class="label">Goal</span>
+          <span class="val">${goal} cal</span>
+        </div>
+        <div class="row thick">
+          <span class="label">Consumed</span>
+          <span class="val">${total} cal</span>
+        </div>
+        <div class="row total">
+          <span class="label">${over ? 'Over by' : 'Remaining'}</span>
+          <span class="val ${over ? 'over' : 'under'}">${Math.abs(remaining)} cal</span>
+        </div>
+        <div class="row protein">
+          <span class="label">Protein</span>
+          <span class="val">${totalProtein}g${proteinGoal ? ` / ${proteinGoal}g` : ''}</span>
+        </div>
+
+        <div class="bar-track"><div class="bar-fill ${over ? 'over' : ''}" style="width:${Math.min(100,pct)}%"></div></div>
+        <div class="bar-caption">${pct}% of daily goal</div>
+        <div class="ranges">
+          <span>◀ Cutting under ${cuttingLine}</span>
+          <span>Excess over ${excessLine} ▶</span>
+        </div>
+
+        <div class="settings-toggle">
+          <button id="settingsBtn">${settingsOpen ? 'Hide settings' : 'Edit goals & ranges'}</button>
+        </div>
+        <div class="settings-panel ${settingsOpen ? 'open' : ''}" id="settingsPanel">
+          <div class="setting-row">
+            <span>Calorie goal</span>
+            <input type="number" id="goalInput" value="${goal}" inputmode="numeric" />
+          </div>
+          <div class="setting-row">
+            <span>Protein goal (g)</span>
+            <input type="number" id="proteinGoalInput" value="${proteinGoal}" inputmode="numeric" />
+          </div>
+          <div class="setting-row">
+            <span>"Cutting" below</span>
+            <input type="number" id="cuttingInput" value="${cuttingLine}" inputmode="numeric" />
+          </div>
+          <div class="setting-row">
+            <span>"Excess" above</span>
+            <input type="number" id="excessInput" value="${excessLine}" inputmode="numeric" />
+          </div>
+        </div>
+      </div>
+
+      <div class="add-card">
+        <h2>Log Food</h2>
+        <div class="quick-add">
+          <label for="commonFoods">Quick add from my items</label>
+          <select id="commonFoods">
+            <option value="">${customFoods.length ? 'Select an item…' : 'No items yet — add one below'}</option>
+            <option value="__add_new__">➕ Add my own item…</option>
+            ${commonFoodsOptionsHtml()}
+          </select>
+          ${customFoods.length ? `
+            <div class="manage-toggle">
+              <button id="manageBtn">${manageOpen ? 'Hide my items' : `Manage my items (${customFoods.length})`}</button>
+            </div>
+          ` : ''}
+          ${manageOpen && customFoods.length ? `
+            <div class="custom-list">
+              ${customFoods.map(it => `
+                <div class="custom-list-item" data-id="${it.id}">
+                  <div>
+                    <div class="ci-name">${escapeHtml(it.name)}</div>
+                    <div class="ci-macro">${it.calories} cal · ${it.protein}g protein</div>
+                  </div>
+                  <div class="ci-actions">
+                    <button class="ci-edit" data-id="${it.id}" aria-label="Edit">✎</button>
+                    <button class="ci-del" data-id="${it.id}" aria-label="Delete">✕</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+          ${customFormOpen ? `
+            <div class="custom-form">
+              <div class="form-title">${editingCustomId ? 'Edit item' : 'New item'}</div>
+              <div class="add-row-labels">
+                <span class="name">Food</span>
+                <span class="cals">Cal</span>
+                <span class="protein">Protein</span>
+              </div>
+              <div class="add-row">
+                <input class="name" id="customName" type="text" placeholder="e.g. My protein oats" autocomplete="off" value="${customEditValues.name}" />
+                <input class="cals" id="customCals" type="number" placeholder="0" inputmode="numeric" value="${customEditValues.calories}" />
+                <input class="protein" id="customProtein" type="number" placeholder="0g" inputmode="numeric" value="${customEditValues.protein}" />
+              </div>
+              <div class="form-btns">
+                <button class="cancel-btn" id="customCancelBtn" type="button">Cancel</button>
+                <button class="save-btn" id="customSaveBtn" type="button">${editingCustomId ? 'Save changes' : 'Save item'}</button>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+        <div class="divider-word">or enter manually</div>
+        <div class="add-row-labels">
+          <span class="name">Food</span>
+          <span class="cals">Cal</span>
+          <span class="protein">Protein</span>
+        </div>
+        <div class="add-row">
+          <input class="name" id="foodName" type="text" placeholder="e.g. Chicken salad" autocomplete="off" />
+          <input class="cals" id="foodCals" type="number" placeholder="0" inputmode="numeric" />
+          <input class="protein" id="foodProtein" type="number" placeholder="0g" inputmode="numeric" />
+        </div>
+        <button class="add-btn" id="addBtn">Add entry</button>
+      </div>
+
+      <div class="log-header">
+        <h2>Today's Log</h2>
+        <span class="count">${entries.length} item${entries.length===1?'':'s'}</span>
+      </div>
+      ${entriesHtml}
+    `;
+
+    $('#commonFoods').addEventListener('change', (e) => {
+      const val = e.target.value;
+      if(val === '__add_new__'){
+        customFormOpen = true;
+        editingCustomId = null;
+        customEditValues = {name:'', calories:'', protein:''};
+        render();
+        return;
+      }
+      const opt = e.target.selectedOptions[0];
+      if(!opt || !opt.dataset.cal) return;
+      $('#foodName').value = opt.value;
+      $('#foodCals').value = opt.dataset.cal;
+      $('#foodProtein').value = opt.dataset.protein;
+      $('#foodCals').focus();
+    });
+
+    const manageBtn = $('#manageBtn');
+    if(manageBtn){
+      manageBtn.addEventListener('click', () => { manageOpen = !manageOpen; render(); });
+    }
+
+    main.querySelectorAll('.ci-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = customFoods.find(f => f.id === btn.dataset.id);
+        if(!item) return;
+        editingCustomId = item.id;
+        customEditValues = {name:item.name, calories:item.calories, protein:item.protein};
+        customFormOpen = true;
+        render();
+      });
+    });
+    main.querySelectorAll('.ci-del').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        customFoods = customFoods.filter(f => f.id !== btn.dataset.id);
+        await saveCustomFoods();
+        render();
+        showToast('Item removed');
+      });
+    });
+
+    const customCancelBtn = $('#customCancelBtn');
+    if(customCancelBtn){
+      customCancelBtn.addEventListener('click', () => {
+        customFormOpen = false;
+        editingCustomId = null;
+        render();
+      });
+    }
+    const customSaveBtn = $('#customSaveBtn');
+    if(customSaveBtn){
+      customSaveBtn.addEventListener('click', async () => {
+        const name = $('#customName').value.trim();
+        const cals = parseInt($('#customCals').value, 10);
+        const protein = parseInt($('#customProtein').value, 10);
+        if(!name){ $('#customName').focus(); return; }
+        if(isNaN(cals) || cals < 0){ $('#customCals').focus(); return; }
+        const proteinVal = isNaN(protein) || protein < 0 ? 0 : protein;
+
+        const wasEditing = !!editingCustomId;
+        if(editingCustomId){
+          const item = customFoods.find(f => f.id === editingCustomId);
+          if(item){ item.name = name; item.calories = cals; item.protein = proteinVal; }
+        } else {
+          customFoods.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+            name, calories: cals, protein: proteinVal
+          });
+        }
+        await saveCustomFoods();
+        customFormOpen = false;
+        editingCustomId = null;
+        render();
+        showToast(wasEditing ? 'Item updated' : `Saved "${name}"`);
+      });
+    }
+
+    $('#addBtn').addEventListener('click', addEntry);
+    $('#foodProtein').addEventListener('keydown', (e) => { if(e.key === 'Enter') addEntry(); });
+    $('#foodCals').addEventListener('keydown', (e) => { if(e.key === 'Enter') $('#foodProtein').focus(); });
+    $('#foodName').addEventListener('keydown', (e) => { if(e.key === 'Enter') $('#foodCals').focus(); });
+
+    $('#settingsBtn').addEventListener('click', () => {
+      settingsOpen = !settingsOpen;
+      render();
+    });
+
+    if(settingsOpen){
+      const goalInput = $('#goalInput');
+      const proteinGoalInput = $('#proteinGoalInput');
+      const cuttingInput = $('#cuttingInput');
+      const excessInput = $('#excessInput');
+
+      const commit = async () => {
+        const g = parseInt(goalInput.value, 10);
+        const pg = parseInt(proteinGoalInput.value, 10);
+        const cl = parseInt(cuttingInput.value, 10);
+        const el = parseInt(excessInput.value, 10);
+        if(!isNaN(g) && g > 0) goal = g;
+        if(!isNaN(pg) && pg >= 0) proteinGoal = pg;
+        if(!isNaN(cl) && cl >= 0) cuttingLine = cl;
+        if(!isNaN(el) && el >= 0) excessLine = el;
+        await saveSettings();
+        render();
+      };
+      goalInput.addEventListener('change', commit);
+      proteinGoalInput.addEventListener('change', commit);
+      cuttingInput.addEventListener('change', commit);
+      excessInput.addEventListener('change', commit);
+    }
+
+    main.querySelectorAll('.del').forEach(btn => {
+      btn.addEventListener('click', () => deleteEntry(btn.dataset.id));
+    });
+  }
+
+  async function reconcileMissingSummaries(){
+    try{
+      const list = await storage.list('entries:');
+      if(!list || !list.keys) return;
+      let changed = false;
+      for(const key of list.keys){
+        const dateKey = key.slice('entries:'.length);
+        if(daySummaries[dateKey] !== undefined) continue;
+        try{
+          const res = await storage.get(key);
+          const dayEntries = (res && res.value) ? JSON.parse(res.value) : [];
+          if(dayEntries.length){
+            const cal = dayEntries.reduce((s,e)=> s + (e.calories||0), 0);
+            const prot = dayEntries.reduce((s,e)=> s + (e.protein||0), 0);
+            daySummaries[dateKey] = {calories: cal, protein: prot};
+            changed = true;
+          }
+        }catch(e){ /* skip unreadable day */ }
+      }
+      if(changed) await saveDaySummaries();
+    }catch(e){
+      console.error('Failed to reconcile history', e);
+    }
+  }
+
+  function renderHistory(){
+    const dateKeys = Object.keys(daySummaries).sort().reverse();
+
+    if(dateKeys.length === 0){
+      main.innerHTML = `<div class="empty"><span class="glyph">📅</span>No history yet.<br>Log a few days and they'll show up here.</div>`;
+      return;
+    }
+
+    const monthGroups = {};
+    dateKeys.forEach(k => {
+      const monthKey = k.slice(0,7); // YYYY-MM
+      if(!monthGroups[monthKey]) monthGroups[monthKey] = [];
+      monthGroups[monthKey].push(k);
+    });
+
+    const monthTitle = (monthKey) => {
+      const [y,m] = monthKey.split('-').map(Number);
+      return new Date(y, m-1, 1).toLocaleDateString(undefined, {month:'long', year:'numeric'});
+    };
+    const rowDate = (k) => {
+      const [y,m,d] = k.split('-').map(Number);
+      const dt = new Date(y, m-1, d);
+      return {
+        date: dt.toLocaleDateString(undefined, {month:'short', day:'numeric'}),
+        dow: dt.toLocaleDateString(undefined, {weekday:'short'})
+      };
+    };
+
+    main.innerHTML = Object.keys(monthGroups).map(monthKey => `
+      <div class="month-group">
+        <div class="month-title">${monthTitle(monthKey)}</div>
+        ${monthGroups[monthKey].map(k => {
+          const s = daySummaries[k];
+          const rd = rowDate(k);
+          const status = statusFor(s.calories);
+          return `
+            <div class="hist-row" data-date="${k}">
+              <div>
+                <div class="hd-date">${rd.date}</div>
+                <div class="hd-dow">${rd.dow}</div>
+              </div>
+              <div class="hd-right">
+                <div class="hd-macro">${s.protein}g protein</div>
+                <span class="hist-badge ${status.cls}">${status.text}</span>
+                <span class="hd-cal">${s.calories}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `).join('');
+  }
+
+  function wireHistoryEvents(){
+    $('#closeHistoryBtn').addEventListener('click', () => { view = 'log'; render(); });
+    main.querySelectorAll('.hist-row').forEach(row => {
+      row.addEventListener('click', async () => {
+        const [y,m,d] = row.dataset.date.split('-').map(Number);
+        currentDate = new Date(y, m-1, d);
+        view = 'log';
+        main.innerHTML = '<div class="loading">Loading…</div>';
+        await loadEntries();
+        render();
+      });
+    });
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  async function addEntry(){
+    const nameInput = $('#foodName');
+    const calsInput = $('#foodCals');
+    const proteinInput = $('#foodProtein');
+    const name = nameInput.value.trim();
+    const cals = parseInt(calsInput.value, 10);
+    const protein = parseInt(proteinInput.value, 10);
+
+    if(!name){ nameInput.focus(); return; }
+    if(isNaN(cals) || cals < 0){ calsInput.focus(); return; }
+
+    const entry = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,7),
+      name,
+      calories: cals,
+      protein: isNaN(protein) || protein < 0 ? 0 : protein,
+      time: new Date().toISOString()
+    };
+    entries.push(entry);
+    await saveEntries();
+    render();
+    showToast(`Added ${name}`);
+  }
+
+  async function deleteEntry(id){
+    entries = entries.filter(e => e.id !== id);
+    await saveEntries();
+    render();
+  }
+
+  async function goToDate(newDate){
+    currentDate = newDate;
+    main.innerHTML = '<div class="loading">Loading…</div>';
+    await loadEntries();
+    render();
+  }
+
+  async function init(){
+    try{
+      localStorage.setItem(STORAGE_PREFIX + '__test__', '1');
+      localStorage.removeItem(STORAGE_PREFIX + '__test__');
+    }catch(e){
+      main.innerHTML = '<div class="empty">Your browser is blocking local storage (common in Private Browsing mode), so entries can\'t be saved. Try opening this in a normal browser tab.</div>';
+      return;
+    }
+    await loadSettings();
+    await loadCustomFoods();
+    await loadDaySummaries();
+    await loadEntries();
+    render();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
