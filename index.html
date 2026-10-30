@@ -295,6 +295,28 @@
     padding:5px 11px; cursor:pointer; color:var(--ink);
   }
   .history-btn:active{opacity:0.7;}
+  .export-card{
+    background:var(--paper); border:1px solid var(--ink); border-radius:var(--radius);
+    padding:14px; margin-bottom:20px;
+  }
+  .export-card h2{
+    font-size:11px; text-transform:uppercase; letter-spacing:1.5px; margin:0 0 10px; color:var(--muted);
+  }
+  .export-dates{display:flex; gap:10px; margin-bottom:10px;}
+  .export-dates label{
+    flex:1; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;
+    color:var(--muted); font-weight:700; display:flex; flex-direction:column; gap:4px; min-width:0;
+  }
+  .export-dates input{
+    font-family:inherit; border:1px solid var(--ink); border-radius:var(--radius);
+    padding:9px 8px; font-size:15px; background:var(--paper-2); color:var(--ink); width:100%; min-width:0;
+  }
+  .export-quick{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px;}
+  .export-quick button{
+    background:none; border:1px solid var(--ink); border-radius:20px; padding:5px 10px;
+    font-size:11px; font-weight:800; cursor:pointer; color:var(--ink);
+  }
+  .export-quick button:active{background:var(--paper-2);}
   .month-group{margin-bottom:20px;}
   .month-title{
     font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px;
@@ -349,6 +371,9 @@
   const main = $('#main');
   const toastEl = $('#toast');
 
+  // Local storage shim — same get/set/delete/list interface as Claude's
+  // artifact storage, but backed by the browser's own localStorage so this
+  // app works completely standalone (no Claude connection required).
   const STORAGE_PREFIX = 'ledger:';
   const storage = {
     async get(key){
@@ -393,8 +418,10 @@
   let customEditValues = {name:'', calories:'', protein:''};
   let editingEntryId = null;
   let entryEditValues = {name:'', calories:'', protein:''};
-  let view = 'log';
-  let daySummaries = {};
+  let view = 'log'; // 'log' | 'history'
+  let exportFrom = '';
+  let exportTo = '';
+  let daySummaries = {}; // { 'YYYY-MM-DD': {calories, protein} }
 
   function commonFoodsOptionsHtml(){
     if(!customFoods.length) return '';
@@ -462,7 +489,7 @@
         if(s.proteinLowLine >= 0) proteinLowLine = s.proteinLowLine;
         if(s.proteinHighLine >= 0) proteinHighLine = s.proteinHighLine;
       }
-    }catch(e){ }
+    }catch(e){ /* use defaults */ }
   }
   async function saveSettings(){
     try{
@@ -1001,7 +1028,7 @@
             daySummaries[dateKey] = {calories: cal, protein: prot, burned: burned};
             changed = true;
           }
-        }catch(e){ }
+        }catch(e){ /* skip unreadable day */ }
       }
       if(changed) await saveDaySummaries();
     }catch(e){
@@ -1019,7 +1046,7 @@
 
     const monthGroups = {};
     dateKeys.forEach(k => {
-      const monthKey = k.slice(0,7);
+      const monthKey = k.slice(0,7); // YYYY-MM
       if(!monthGroups[monthKey]) monthGroups[monthKey] = [];
       monthGroups[monthKey].push(k);
     });
@@ -1037,7 +1064,34 @@
       };
     };
 
-    main.innerHTML = Object.keys(monthGroups).map(monthKey => `
+    if(!exportFrom || !exportTo){
+      const now = new Date(); now.setHours(0,0,0,0);
+      exportTo = fmtDateKey(now);
+      exportFrom = fmtDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
+    }
+    const exportCardHtml = `
+      <div class="export-card">
+        <h2>⬇ Export to CSV</h2>
+        <div class="export-dates">
+          <label>From
+            <input type="date" id="exportFrom" value="${exportFrom}" />
+          </label>
+          <label>To
+            <input type="date" id="exportTo" value="${exportTo}" />
+          </label>
+        </div>
+        <div class="export-quick">
+          <button type="button" data-range="today">Today</button>
+          <button type="button" data-range="7">Last 7 days</button>
+          <button type="button" data-range="month">This month</button>
+          <button type="button" data-range="all">All time</button>
+        </div>
+        <button class="add-btn" id="exportBtn" type="button">Download CSV</button>
+        <div class="qty-hint">One row per food and exercise entry, plus a daily total row for each day. Exercise shows as negative calories.</div>
+      </div>
+    `;
+
+    main.innerHTML = exportCardHtml + Object.keys(monthGroups).map(monthKey => `
       <div class="month-group">
         <div class="month-title">${monthTitle(monthKey)}</div>
         ${monthGroups[monthKey].map(k => {
@@ -1064,8 +1118,124 @@
     `).join('');
   }
 
+  // ---------- CSV export ----------
+  function csvCell(v){
+    let s = (v === null || v === undefined) ? '' : String(v);
+    // Stop spreadsheet apps from treating text as a formula
+    if(typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if(/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+  function csvTime(iso){
+    try{
+      const d = new Date(iso);
+      if(isNaN(d.getTime())) return '';
+      return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }catch(e){ return ''; }
+  }
+  function csvRatio(cal, protein){
+    return (protein && protein > 0) ? Math.round(cal / protein) : '';
+  }
+  function buildCsv(days){
+    const rows = [['Date','Time','Type','Item','Calories','Protein (g)','Cal per g Protein']];
+    days.forEach(day => {
+      const food = day.food.slice().sort((a,b) => String(a.time).localeCompare(String(b.time)));
+      const ex = day.exercise.slice().sort((a,b) => String(a.time).localeCompare(String(b.time)));
+      let eaten = 0, protein = 0, burned = 0;
+      food.forEach(e => {
+        const cal = e.calories || 0, p = e.protein || 0;
+        eaten += cal; protein += p;
+        rows.push([day.date, csvTime(e.time), 'Food', e.name, cal, p, csvRatio(cal, p)]);
+      });
+      ex.forEach(e => {
+        const cal = e.calories || 0;
+        burned += cal;
+        rows.push([day.date, csvTime(e.time), 'Exercise', e.name, -cal, '', '']);
+      });
+      const net = eaten - burned;
+      rows.push([day.date, '', 'Day Total', `Eaten ${eaten} | Burned ${burned} | Net ${net}`, net, protein, csvRatio(eaten, protein)]);
+    });
+    return rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  }
+
+  async function collectExportDays(from, to){
+    const foodList = await storage.list('entries:');
+    const exList = await storage.list('exercise:');
+    const dates = new Set();
+    (foodList && foodList.keys ? foodList.keys : []).forEach(k => dates.add(k.slice('entries:'.length)));
+    (exList && exList.keys ? exList.keys : []).forEach(k => dates.add(k.slice('exercise:'.length)));
+    const inRange = Array.from(dates)
+      .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= from && d <= to)
+      .sort();
+    const days = [];
+    for(const date of inRange){
+      let food = [], exercise = [];
+      try{ const r = await storage.get('entries:' + date); food = (r && r.value) ? JSON.parse(r.value) : []; }catch(e){}
+      try{ const r = await storage.get('exercise:' + date); exercise = (r && r.value) ? JSON.parse(r.value) : []; }catch(e){}
+      if(food.length || exercise.length) days.push({date, food, exercise});
+    }
+    return days;
+  }
+
+  async function exportCsv(){
+    const from = $('#exportFrom').value;
+    const to = $('#exportTo').value;
+    if(!from || !to){ showToast('Pick a start and end date'); return; }
+    if(from > to){ showToast('Start date is after end date'); return; }
+    exportFrom = from; exportTo = to;
+
+    const days = await collectExportDays(from, to);
+    if(!days.length){ showToast('Nothing logged in that range'); return; }
+
+    const csv = '﻿' + buildCsv(days);
+    const fname = `ledger_${from}_to_${to}.csv`;
+
+    // On iPhone the share sheet is the most reliable way to save a file ("Save to Files")
+    try{
+      const file = new File([csv], fname, {type:'text/csv'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title: fname});
+        showToast(`Exported ${days.length} day${days.length===1?'':'s'}`);
+        return;
+      }
+    }catch(e){
+      if(e && e.name === 'AbortError') return; // user closed the share sheet
+    }
+
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    showToast(`Downloaded ${days.length} day${days.length===1?'':'s'}`);
+  }
+
+  function setExportRange(kind){
+    const today = new Date(); today.setHours(0,0,0,0);
+    let from = new Date(today), to = new Date(today);
+    if(kind === '7') from.setDate(from.getDate() - 6);
+    else if(kind === 'month') from = new Date(today.getFullYear(), today.getMonth(), 1);
+    let fromKey = fmtDateKey(from);
+    if(kind === 'all'){
+      const keys = Object.keys(daySummaries).sort();
+      fromKey = keys.length ? keys[0] : fmtDateKey(today);
+    }
+    exportFrom = fromKey;
+    exportTo = fmtDateKey(to);
+    $('#exportFrom').value = exportFrom;
+    $('#exportTo').value = exportTo;
+  }
+
   function wireHistoryEvents(){
     $('#closeHistoryBtn').addEventListener('click', () => { view = 'log'; render(); });
+    const exportBtn = $('#exportBtn');
+    if(exportBtn){
+      exportBtn.addEventListener('click', exportCsv);
+      main.querySelectorAll('.export-quick button').forEach(b => {
+        b.addEventListener('click', () => setExportRange(b.dataset.range));
+      });
+    }
     main.querySelectorAll('.hist-row').forEach(row => {
       row.addEventListener('click', async () => {
         const [y,m,d] = row.dataset.date.split('-').map(Number);
