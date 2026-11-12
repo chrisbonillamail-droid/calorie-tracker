@@ -228,14 +228,14 @@
   .add-row input:focus{outline:2px solid var(--green); outline-offset:-1px;}
   .add-row input.name{flex:1.4; min-width:0;}
   .add-row input.qty{width:56px;}
-  .add-row input.cals{width:60px;}
-  .add-row input.protein{width:60px;}
+  .add-row input.cals{width:78px;}
+  .add-row input.protein{width:78px;}
   .add-row-labels{display:flex; gap:8px; margin-top:4px;}
   .add-row-labels span{font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px;}
   .add-row-labels span.name{flex:1.4;}
   .add-row-labels span.qty{width:56px; text-align:center;}
-  .add-row-labels span.cals{width:60px; text-align:center;}
-  .add-row-labels span.protein{width:60px; text-align:center;}
+  .add-row-labels span.cals{width:78px; text-align:center;}
+  .add-row-labels span.protein{width:78px; text-align:center;}
   .qty-hint{font-size:10.5px; color:var(--muted); margin-top:6px; line-height:1.4;}
   .add-btn{
     margin-top:10px; width:100%; padding:11px; background:var(--ink); color:var(--paper);
@@ -467,6 +467,7 @@
     if(isYesterday(d)) return 'Yesterday';
     return d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
   }
+  function fmt1(n){ return Math.round((Number(n) || 0) * 10) / 10; }
   function timeLabel(iso){
     try{ return new Date(iso).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}); }
     catch(e){ return ''; }
@@ -627,9 +628,9 @@
       const d = new Date(currentDate); d.setDate(d.getDate() + 1); goToDate(d);
     });
 
-    const total = entries.reduce((sum, e) => sum + e.calories, 0);
-    const totalProtein = entries.reduce((sum, e) => sum + (e.protein || 0), 0);
-    const totalBurned = exerciseEntries.reduce((sum, e) => sum + e.calories, 0);
+    const total = fmt1(entries.reduce((sum, e) => sum + e.calories, 0));
+    const totalProtein = fmt1(entries.reduce((sum, e) => sum + (e.protein || 0), 0));
+    const totalBurned = fmt1(exerciseEntries.reduce((sum, e) => sum + e.calories, 0));
     const net = total - totalBurned;
     const remaining = goal - net;
     const proteinRemaining = proteinGoal - totalProtein;
@@ -650,10 +651,10 @@
               <div class="info">
                 <div class="name">${escapeHtml(e.name)}</div>
                 <div class="time">${timeLabel(e.time)}</div>
-                ${e.protein ? `<div class="macros">${e.protein}g protein${ri ? ` &middot; Ratio <span class="ratio ${ri.cls}">${ri.ratio}</span>` : ''}</div>` : ''}
+                ${e.protein ? `<div class="macros">${fmt1(e.protein)}g protein${ri ? ` &middot; Ratio <span class="ratio ${ri.cls}">${ri.ratio}</span>` : ''}</div>` : ''}
               </div>
               <div class="right">
-                <span class="cal">${e.calories}</span>
+                <span class="cal">${fmt1(e.calories)}</span>
                 <button class="edit-entry" data-id="${e.id}" aria-label="Edit entry">✎</button>
                 <button class="del" data-id="${e.id}" aria-label="Delete entry">✕</button>
               </div>
@@ -732,27 +733,27 @@
         <div class="settings-panel ${settingsOpen ? 'open' : ''}" id="settingsPanel">
           <div class="setting-row">
             <span>Calorie goal</span>
-            <input type="number" id="goalInput" value="${goal}" inputmode="numeric" />
+            <input type="number" id="goalInput" value="${goal}" inputmode="decimal" />
           </div>
           <div class="setting-row">
             <span>Protein goal (g)</span>
-            <input type="number" id="proteinGoalInput" value="${proteinGoal}" inputmode="numeric" />
+            <input type="number" id="proteinGoalInput" value="${proteinGoal}" inputmode="decimal" />
           </div>
           <div class="setting-row">
             <span>"Cutting" below</span>
-            <input type="number" id="cuttingInput" value="${cuttingLine}" inputmode="numeric" />
+            <input type="number" id="cuttingInput" value="${cuttingLine}" inputmode="decimal" />
           </div>
           <div class="setting-row">
             <span>"Excess" above</span>
-            <input type="number" id="excessInput" value="${excessLine}" inputmode="numeric" />
+            <input type="number" id="excessInput" value="${excessLine}" inputmode="decimal" />
           </div>
           <div class="setting-row">
             <span>"Losing Muscle" below (g)</span>
-            <input type="number" id="proteinLowInput" value="${proteinLowLine}" inputmode="numeric" />
+            <input type="number" id="proteinLowInput" value="${proteinLowLine}" inputmode="decimal" />
           </div>
           <div class="setting-row">
             <span>"Excess Protein" above (g)</span>
-            <input type="number" id="proteinHighInput" value="${proteinHighLine}" inputmode="numeric" />
+            <input type="number" id="proteinHighInput" value="${proteinHighLine}" inputmode="decimal" />
           </div>
         </div>
       </div>
@@ -797,8 +798,8 @@
               </div>
               <div class="add-row">
                 <input class="name" id="customName" type="text" placeholder="e.g. My protein oats" autocomplete="off" value="${customEditValues.name}" />
-                <input class="cals" id="customCals" type="number" placeholder="0" inputmode="numeric" value="${customEditValues.calories}" />
-                <input class="protein" id="customProtein" type="number" placeholder="0g" inputmode="numeric" value="${customEditValues.protein}" />
+                <input class="cals" id="customCals" type="number" placeholder="0" inputmode="decimal" value="${customEditValues.calories}" />
+                <input class="protein" id="customProtein" type="number" placeholder="0g" inputmode="decimal" value="${customEditValues.protein}" />
               </div>
               <div class="form-btns">
                 <button class="cancel-btn" id="customCancelBtn" type="button">Cancel</button>
@@ -817,8 +818,8 @@
         <div class="add-row">
           <input class="name" id="foodName" type="text" placeholder="e.g. Chicken salad" autocomplete="off" value="${editingEntryId ? escapeHtml(entryEditValues.name) : ''}" />
           <input class="qty" id="foodQty" type="number" value="1" step="1" min="0" inputmode="decimal" />
-          <input class="cals" id="foodCals" type="number" placeholder="0" inputmode="numeric" value="${editingEntryId ? entryEditValues.calories : ''}" />
-          <input class="protein" id="foodProtein" type="number" placeholder="0g" inputmode="numeric" value="${editingEntryId ? entryEditValues.protein : ''}" />
+          <input class="cals" id="foodCals" type="number" placeholder="0" inputmode="decimal" value="${editingEntryId ? entryEditValues.calories : ''}" />
+          <input class="protein" id="foodProtein" type="number" placeholder="0g" inputmode="decimal" value="${editingEntryId ? entryEditValues.protein : ''}" />
         </div>
         <div class="qty-hint">${editingEntryId ? 'Qty is reset to 1 while editing — the numbers above are already the final totals.' : 'Qty multiplies calories &amp; protein — e.g. 1.45 &times; a 500 cal / 40g item = 725 cal / 58g'}</div>
         <div class="form-btns">
@@ -841,7 +842,7 @@
         </div>
         <div class="add-row">
           <input class="name" id="exName" type="text" placeholder="e.g. Running" autocomplete="off" />
-          <input class="cals" id="exCals" type="number" placeholder="0" inputmode="numeric" style="width:90px;" />
+          <input class="cals" id="exCals" type="number" placeholder="0" inputmode="decimal" style="width:90px;" />
         </div>
         <button class="add-btn" id="addExBtn">Log exercise</button>
       </div>
@@ -907,8 +908,8 @@
     if(customSaveBtn){
       customSaveBtn.addEventListener('click', async () => {
         const name = $('#customName').value.trim();
-        const cals = parseInt($('#customCals').value, 10);
-        const protein = parseInt($('#customProtein').value, 10);
+        const cals = parseFloat($('#customCals').value);
+        const protein = parseFloat($('#customProtein').value);
         if(!name){ $('#customName').focus(); return; }
         if(isNaN(cals) || cals < 0){ $('#customCals').focus(); return; }
         const proteinVal = isNaN(protein) || protein < 0 ? 0 : protein;
@@ -951,12 +952,12 @@
       const proteinHighInput = $('#proteinHighInput');
 
       const commit = async () => {
-        const g = parseInt(goalInput.value, 10);
-        const pg = parseInt(proteinGoalInput.value, 10);
-        const cl = parseInt(cuttingInput.value, 10);
-        const el = parseInt(excessInput.value, 10);
-        const pl = parseInt(proteinLowInput.value, 10);
-        const ph = parseInt(proteinHighInput.value, 10);
+        const g = parseFloat(goalInput.value);
+        const pg = parseFloat(proteinGoalInput.value);
+        const cl = parseFloat(cuttingInput.value);
+        const el = parseFloat(excessInput.value);
+        const pl = parseFloat(proteinLowInput.value);
+        const ph = parseFloat(proteinHighInput.value);
         if(!isNaN(g) && g > 0) goal = g;
         if(!isNaN(pg) && pg >= 0) proteinGoal = pg;
         if(!isNaN(cl) && cl >= 0) cuttingLine = cl;
@@ -1269,8 +1270,8 @@
     if(!name){ nameInput.focus(); return; }
     if(isNaN(baseCals) || baseCals < 0){ calsInput.focus(); return; }
 
-    const finalCals = Math.round(baseCals * qty);
-    const finalProtein = Math.round((isNaN(baseProtein) || baseProtein < 0 ? 0 : baseProtein) * qty);
+    const finalCals = Math.round(baseCals * qty * 10) / 10;
+    const finalProtein = Math.round((isNaN(baseProtein) || baseProtein < 0 ? 0 : baseProtein) * qty * 10) / 10;
 
     if(editingEntryId){
       const entry = entries.find(x => x.id === editingEntryId);
@@ -1315,7 +1316,7 @@
     const nameInput = $('#exName');
     const calsInput = $('#exCals');
     const name = nameInput.value.trim();
-    const cals = parseInt(calsInput.value, 10);
+    const cals = parseFloat(calsInput.value);
 
     if(!name){ nameInput.focus(); return; }
     if(isNaN(cals) || cals < 0){ calsInput.focus(); return; }
