@@ -467,7 +467,7 @@
     if(isYesterday(d)) return 'Yesterday';
     return d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
   }
-  function fmt1(n){ return Math.round((Number(n) || 0) * 10) / 10; }
+  function fmt1(n){ return Math.round((Number(n) || 0) * 100) / 100; }
   function timeLabel(iso){
     try{ return new Date(iso).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'}); }
     catch(e){ return ''; }
@@ -672,7 +672,7 @@
                 <div class="time">${timeLabel(e.time)}</div>
               </div>
               <div class="right">
-                <span class="cal burn">-${e.calories}</span>
+                <span class="cal burn">-${fmt1(e.calories)}</span>
                 <button class="del burn-del" data-id="${e.id}" aria-label="Delete entry">✕</button>
               </div>
             </li>
@@ -908,8 +908,8 @@
     if(customSaveBtn){
       customSaveBtn.addEventListener('click', async () => {
         const name = $('#customName').value.trim();
-        const cals = parseFloat($('#customCals').value);
-        const protein = parseFloat($('#customProtein').value);
+        const cals = fmt1(parseFloat($('#customCals').value));
+        const protein = fmt1(parseFloat($('#customProtein').value));
         if(!name){ $('#customName').focus(); return; }
         if(isNaN(cals) || cals < 0){ $('#customCals').focus(); return; }
         const proteinVal = isNaN(protein) || protein < 0 ? 0 : protein;
@@ -952,12 +952,12 @@
       const proteinHighInput = $('#proteinHighInput');
 
       const commit = async () => {
-        const g = parseFloat(goalInput.value);
-        const pg = parseFloat(proteinGoalInput.value);
-        const cl = parseFloat(cuttingInput.value);
-        const el = parseFloat(excessInput.value);
-        const pl = parseFloat(proteinLowInput.value);
-        const ph = parseFloat(proteinHighInput.value);
+        const g = fmt1(parseFloat(goalInput.value));
+        const pg = fmt1(parseFloat(proteinGoalInput.value));
+        const cl = fmt1(parseFloat(cuttingInput.value));
+        const el = fmt1(parseFloat(excessInput.value));
+        const pl = fmt1(parseFloat(proteinLowInput.value));
+        const ph = fmt1(parseFloat(proteinHighInput.value));
         if(!isNaN(g) && g > 0) goal = g;
         if(!isNaN(pg) && pg >= 0) proteinGoal = pg;
         if(!isNaN(cl) && cl >= 0) cuttingLine = cl;
@@ -1270,8 +1270,8 @@
     if(!name){ nameInput.focus(); return; }
     if(isNaN(baseCals) || baseCals < 0){ calsInput.focus(); return; }
 
-    const finalCals = Math.round(baseCals * qty * 10) / 10;
-    const finalProtein = Math.round((isNaN(baseProtein) || baseProtein < 0 ? 0 : baseProtein) * qty * 10) / 10;
+    const finalCals = fmt1(baseCals * qty);
+    const finalProtein = fmt1((isNaN(baseProtein) || baseProtein < 0 ? 0 : baseProtein) * qty);
 
     if(editingEntryId){
       const entry = entries.find(x => x.id === editingEntryId);
@@ -1316,7 +1316,7 @@
     const nameInput = $('#exName');
     const calsInput = $('#exCals');
     const name = nameInput.value.trim();
-    const cals = parseFloat(calsInput.value);
+    const cals = fmt1(parseFloat(calsInput.value));
 
     if(!name){ nameInput.focus(); return; }
     if(isNaN(cals) || cals < 0){ calsInput.focus(); return; }
