@@ -339,6 +339,14 @@
   .hist-badge.cutting{background:var(--blue); color:var(--paper); border-color:var(--blue);}
   .hist-badge.excess{background:var(--red); color:var(--paper); border-color:var(--red);}
   .hist-badge.ontrack{background:var(--green); color:var(--paper); border-color:var(--green);}
+  .hd-delta{font-size:11px; color:var(--muted); font-weight:700; text-align:right; white-space:nowrap;}
+  .week-head{
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px 10px;
+    background:var(--paper-2); border-radius:4px; padding:7px 6px; margin:12px 0 2px;
+    font-size:11px; font-weight:800; color:var(--ink);
+  }
+  .week-head .wk-stats{font-weight:600; color:var(--muted);}
+  .month-sum{font-size:11px; font-weight:700; text-transform:none; letter-spacing:0; margin-left:8px; color:var(--ink);}
 
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
@@ -1092,31 +1100,79 @@
       </div>
     `;
 
-    main.innerHTML = exportCardHtml + Object.keys(monthGroups).map(monthKey => `
-      <div class="month-group">
-        <div class="month-title">${monthTitle(monthKey)}</div>
-        ${monthGroups[monthKey].map(k => {
-          const s = daySummaries[k];
-          const burned = s.burned || 0;
-          const net = s.calories - burned;
-          const rd = rowDate(k);
-          const status = statusFor(net);
-          return `
-            <div class="hist-row" data-date="${k}">
-              <div>
-                <div class="hd-date">${rd.date}</div>
-                <div class="hd-dow">${rd.dow}</div>
-              </div>
-              <div class="hd-right">
-                <div class="hd-macro">${s.protein}g protein${burned ? ` &middot; -${burned} burned` : ''}</div>
-                <span class="hist-badge ${status.cls}">${status.text}</span>
-                <span class="hd-cal">${net}</span>
-              </div>
+    const dayNet = (s) => (s.calories || 0) - (s.burned || 0);
+    const fmtDiff = (d) => {
+      if(Math.abs(d) < 0.005) return 'on goal';
+      return d > 0 ? `+${fmt1(d)} over` : `-${fmt1(-d)} under`;
+    };
+    const mondayOf = (k) => {
+      const [y,m,d] = k.split('-').map(Number);
+      const dt = new Date(y, m-1, d);
+      dt.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+      return fmtDateKey(dt);
+    };
+    const summarize = (keys) => {
+      let diff = 0, ex = 0, on = 0, cut = 0;
+      keys.forEach(k => {
+        const n = dayNet(daySummaries[k]);
+        diff += n - goal;
+        const cls = statusFor(n).cls;
+        if(cls === 'excess') ex++;
+        else if(cls === 'cutting') cut++;
+        else if(cls === 'ontrack') on++;
+      });
+      return {diff: fmt1(diff), ex, on, cut};
+    };
+    const shortDate = (k) => {
+      const [y,m,d] = k.split('-').map(Number);
+      return new Date(y, m-1, d).toLocaleDateString(undefined, {month:'short', day:'numeric'});
+    };
+    const weekHeader = (wk) => {
+      const keys = dateKeys.filter(x => mondayOf(x) === wk);
+      const s = summarize(keys);
+      const sun = new Date(...wk.split('-').map((v,i) => i === 1 ? Number(v)-1 : Number(v)));
+      sun.setDate(sun.getDate() + 6);
+      const sunKey = fmtDateKey(sun);
+      return `
+        <div class="week-head">
+          <span>Week of ${shortDate(wk)} to ${shortDate(sunKey)}</span>
+          <span class="wk-stats">${fmtDiff(s.diff)} &middot; ${s.ex} excess &middot; ${s.on} on track &middot; ${s.cut} cutting</span>
+        </div>`;
+    };
+
+    main.innerHTML = exportCardHtml + Object.keys(monthGroups).map(monthKey => {
+      const monthKeys = monthGroups[monthKey];
+      const ms = summarize(monthKeys);
+      let lastWeek = null;
+      const rows = monthKeys.map(k => {
+        const s = daySummaries[k];
+        const burned = s.burned || 0;
+        const net = dayNet(s);
+        const rd = rowDate(k);
+        const status = statusFor(net);
+        const wk = mondayOf(k);
+        let head = '';
+        if(wk !== lastWeek){ lastWeek = wk; head = weekHeader(wk); }
+        return head + `
+          <div class="hist-row" data-date="${k}">
+            <div>
+              <div class="hd-date">${rd.date}</div>
+              <div class="hd-dow">${rd.dow}</div>
             </div>
-          `;
-        }).join('')}
-      </div>
-    `).join('');
+            <div class="hd-right">
+              <div class="hd-macro">${s.protein}g protein${burned ? ` &middot; -${burned} burned` : ''}</div>
+              <span class="hist-badge ${status.cls}">${status.text}</span>
+              <div class="hd-delta">${fmtDiff(net - goal)}</div>
+              <span class="hd-cal">${net}</span>
+            </div>
+          </div>`;
+      }).join('');
+      return `
+      <div class="month-group">
+        <div class="month-title">${monthTitle(monthKey)}<span class="month-sum">${fmtDiff(ms.diff)} &middot; ${ms.ex} excess &middot; ${ms.on} on track &middot; ${ms.cut} cutting</span></div>
+        ${rows}
+      </div>`;
+    }).join('');
   }
 
   // ---------- CSV export ----------
