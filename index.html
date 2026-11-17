@@ -1048,10 +1048,9 @@
   function renderHistory(){
     const dateKeys = Object.keys(daySummaries).sort().reverse();
 
-    if(dateKeys.length === 0){
-      main.innerHTML = `<div class="empty"><span class="glyph">📅</span>No history yet.<br>Log a few days and they'll show up here.</div>`;
-      return;
-    }
+    const emptyHtml = dateKeys.length === 0
+      ? `<div class="empty"><span class="glyph">📅</span>No history yet.<br>Log a few days or import a CSV and they'll show up here.</div>`
+      : '';
 
     const monthGroups = {};
     dateKeys.forEach(k => {
@@ -1143,7 +1142,7 @@
         </div>`;
     };
 
-    main.innerHTML = exportCardHtml + Object.keys(monthGroups).map(monthKey => {
+    main.innerHTML = exportCardHtml + emptyHtml + Object.keys(monthGroups).map(monthKey => {
       const monthKeys = monthGroups[monthKey];
       const ms = summarize(monthKeys);
       let lastWeek = null;
