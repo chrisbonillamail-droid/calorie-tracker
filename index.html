@@ -436,7 +436,7 @@
     const sorted = customFoods.slice().sort((a,b) => a.name.localeCompare(b.name, undefined, {sensitivity:'base'}));
     return `
       <optgroup label="My Items">
-        ${sorted.map(it => `<option value="${escapeHtml(it.name)}" data-cal="${it.calories}" data-protein="${it.protein}">${escapeHtml(it.name)} — ${it.calories} cal / ${it.protein}g</option>`).join('')}
+        ${sorted.map(it => `<option value="${escapeHtml(it.name)}" data-cal="${it.calories}" data-protein="${it.protein}">${escapeHtml(it.name)} — ${fmt1(it.calories)} cal / ${fmt1(it.protein)}g</option>`).join('')}
       </optgroup>
     `;
   }
@@ -698,23 +698,23 @@
         <div class="stat-grid">
           <div class="stat-box">
             <div class="stat-label">Calories eaten</div>
-            <div class="stat-value">${total}</div>
+            <div class="stat-value">${fmt1(total)}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${over ? 'Calories over' : 'Calories left'}</div>
-            <div class="stat-value ${over ? 'over' : 'under'}">${Math.abs(remaining)}</div>
+            <div class="stat-value ${over ? 'over' : 'under'}">${fmt1(Math.abs(remaining))}</div>
           </div>
           <div class="stat-box">
             <div class="stat-label">Protein eaten</div>
-            <div class="stat-value">${totalProtein}<small>g</small></div>
+            <div class="stat-value">${fmt1(totalProtein)}<small>g</small></div>
           </div>
           <div class="stat-box">
             <div class="stat-label">${proteinOver ? 'Protein over' : 'Protein left'}</div>
-            <div class="stat-value ${proteinOver ? 'over' : 'under'}">${Math.abs(proteinRemaining)}<small>g</small></div>
+            <div class="stat-value ${proteinOver ? 'over' : 'under'}">${fmt1(Math.abs(proteinRemaining))}<small>g</small></div>
           </div>
           <div class="stat-box full">
             <div class="stat-label">🔥 Calories burned</div>
-            <div class="stat-value burned">${totalBurned}</div>
+            <div class="stat-value burned">${fmt1(totalBurned)}</div>
           </div>
         </div>
 
@@ -786,7 +786,7 @@
                 <div class="custom-list-item" data-id="${it.id}">
                   <div>
                     <div class="ci-name">${escapeHtml(it.name)}</div>
-                    <div class="ci-macro">${it.calories} cal · ${it.protein}g protein</div>
+                    <div class="ci-macro">${fmt1(it.calories)} cal · ${fmt1(it.protein)}g protein</div>
                   </div>
                   <div class="ci-actions">
                     <button class="ci-edit" data-id="${it.id}" aria-label="Edit">✎</button>
@@ -1162,10 +1162,10 @@
               <div class="hd-dow">${rd.dow}</div>
             </div>
             <div class="hd-right">
-              <div class="hd-macro">${s.protein}g protein${burned ? ` &middot; -${burned} burned` : ''}</div>
+              <div class="hd-macro">${fmt1(s.protein)}g protein${burned ? ` &middot; -${fmt1(burned)} burned` : ''}</div>
               <span class="hist-badge ${status.cls}">${status.text}</span>
               <div class="hd-delta">${fmtDiff(net - goal)}</div>
-              <span class="hd-cal">${net}</span>
+              <span class="hd-cal">${fmt1(net)}</span>
             </div>
           </div>`;
       }).join('');
@@ -1212,7 +1212,7 @@
         rows.push([day.date, csvTime(e.time), 'Exercise', e.name, -cal, '', '']);
       });
       const net = eaten - burned;
-      rows.push([day.date, '', 'Day Total', `Eaten ${eaten} | Burned ${burned} | Net ${net}`, net, protein, csvRatio(eaten, protein)]);
+      rows.push([day.date, '', 'Day Total', `Eaten ${fmt1(eaten)} | Burned ${fmt1(burned)} | Net ${fmt1(net)}`, fmt1(net), fmt1(protein), csvRatio(eaten, protein)]);
     });
     return rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
   }
