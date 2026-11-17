@@ -1214,6 +1214,10 @@
       const net = eaten - burned;
       rows.push([day.date, '', 'Day Total', `Eaten ${fmt1(eaten)} | Burned ${fmt1(burned)} | Net ${fmt1(net)}`, fmt1(net), fmt1(protein), csvRatio(eaten, protein)]);
     });
+    // Quick-add list, so it carries over exactly on import
+    customFoods.slice().sort((a,b) => a.name.localeCompare(b.name, undefined, {sensitivity:'base'})).forEach(it => {
+      rows.push(['', '', 'My Item', it.name, fmt1(it.calories), fmt1(it.protein || 0), csvRatio(it.calories, it.protein)]);
+    });
     return rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
   }
 
@@ -1244,7 +1248,7 @@
     exportFrom = from; exportTo = to;
 
     const days = await collectExportDays(from, to);
-    if(!days.length){ showToast('Nothing logged in that range'); return; }
+    if(!days.length && !customFoods.length){ showToast('Nothing logged in that range'); return; }
 
     const csv = '﻿' + buildCsv(days);
     const fname = `ledger_${from}_to_${to}.csv`;
@@ -1344,6 +1348,8 @@
 
     const plan = {};
     let skipped = 0, bad = 0;
+    const fileItems = [];   // exact "My Item" rows (newer exports)
+    const derived = {};     // per-unit items rebuilt from food history (older exports)
     rows.slice(1).forEach(r => {
       const date = String(r[0] || '').trim();
       const time = String(r[1] || '').trim();
@@ -1351,12 +1357,29 @@
       const item = unguardCell(r[3]);
       const calories = parseFloat(r[4]);
       const protein = parseFloat(r[5]);
+      if(type === 'My Item'){
+        if(item.trim() && !isNaN(calories)){
+          fileItems.push({name: item.trim(), calories: fmt1(calories), protein: fmt1(isNaN(protein) ? 0 : protein)});
+        } else bad++;
+        return;
+      }
       if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ bad++; return; }
       if(type === 'Day Total'){ skipped++; return; }
       if(isNaN(calories) || (type !== 'Food' && type !== 'Exercise')){ bad++; return; }
       const day = plan[date] || (plan[date] = {food: [], exercise: []});
       if(type === 'Food'){
         day.food.push({time, name: item, calories: fmt1(calories), protein: fmt1(isNaN(protein) ? 0 : protein)});
+        // Rebuild a quick-add item: "Chicken oz (×4.94)" at 163 cal -> "Chicken oz" at 163 / 4.94 per unit
+        const mq = item.match(/^(.*\S)\s*\(×\s*([\d.]+)\)\s*$/);
+        const base = (mq ? mq[1] : item).trim();
+        const qty = mq ? parseFloat(mq[2]) : 1;
+        if(base && qty > 0){
+          const stamp = date + ' ' + time;
+          const k = base.toLowerCase();
+          if(!derived[k] || stamp >= derived[k].stamp){
+            derived[k] = {stamp, name: base, calories: fmt1(calories / qty), protein: fmt1((isNaN(protein) ? 0 : protein) / qty)};
+          }
+        }
       } else {
         day.exercise.push({time, name: item, calories: fmt1(Math.abs(calories))});
       }
@@ -1383,16 +1406,26 @@
       addEx += day.exercise.length;
     }
 
+    // Quick-add items: exact rows if the file has them, otherwise rebuilt from history. Never overwrite existing names.
+    const source = fileItems.length ? fileItems : Object.values(derived).map(({name, calories, protein}) => ({name, calories, protein}));
+    const haveNames = new Set(customFoods.map(f => String(f.name).trim().toLowerCase()));
+    const newItems = [];
+    source.forEach(it => {
+      const k = it.name.toLowerCase();
+      if(!haveNames.has(k)){ haveNames.add(k); newItems.push(it); }
+    });
+    const itemsNote = newItems.length ? ` Adds ${newItems.length} item${newItems.length === 1 ? '' : 's'} to My items.` : '';
+
     const days = Object.keys(plan).filter(d => plan[d].food.length || plan[d].exercise.length).length;
     const note = (bad ? ` ${bad} row${bad === 1 ? '' : 's'} couldn't be read.` : '') +
                  (dupes ? ` ${dupes} already exist${dupes === 1 ? 's' : ''} and will be skipped.` : '');
-    if(!addFood && !addEx){
+    if(!addFood && !addEx && !newItems.length){
       preview.innerHTML = `<div class="qty-hint">Nothing new to import.${note}</div>`;
       return;
     }
-    pendingImport = {plan, addFood, addEx};
+    pendingImport = {plan, addFood, addEx, newItems};
     preview.innerHTML = `
-      <div class="qty-hint" style="margin-top:10px;">Ready to import ${addFood} food and ${addEx} exercise entr${addFood + addEx === 1 ? 'y' : 'ies'} across ${days} day${days === 1 ? '' : 's'}.${note}</div>
+      <div class="qty-hint" style="margin-top:10px;">Ready to import ${addFood} food and ${addEx} exercise entr${addFood + addEx === 1 ? 'y' : 'ies'} across ${days} day${days === 1 ? '' : 's'}.${itemsNote}${note}</div>
       <div class="form-btns">
         <button class="cancel-btn" id="importCancel" type="button">Cancel</button>
         <button class="save-btn" id="importConfirm" type="button">Import</button>
@@ -1427,12 +1460,17 @@
         };
       }
     }
+    const items = pendingImport.newItems || [];
+    if(items.length){
+      items.forEach(it => customFoods.push({id: newId(), name: it.name, calories: it.calories, protein: it.protein}));
+      await saveCustomFoods();
+    }
     await saveDaySummaries();
     const n = pendingImport.addFood + pendingImport.addEx;
     const touchedToday = Object.keys(plan).includes(fmtDateKey(currentDate));
     pendingImport = null;
     if(touchedToday){ await loadEntries(); await loadExerciseEntries(); }
-    showToast(`Imported ${n} entr${n === 1 ? 'y' : 'ies'}`);
+    showToast(`Imported ${n} entr${n === 1 ? 'y' : 'ies'}${items.length ? ` and ${items.length} item${items.length === 1 ? '' : 's'}` : ''}`);
     render();
   }
 
