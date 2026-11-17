@@ -1097,6 +1097,9 @@
         </div>
         <button class="add-btn" id="exportBtn" type="button">Download CSV</button>
         <div class="qty-hint">One row per food and exercise entry, plus a daily total row for each day. Exercise shows as negative calories.</div>
+        <button class="add-btn" id="importBtn" type="button" style="background:var(--paper-2); color:var(--ink); border:1px solid var(--ink); margin-top:10px;">Import CSV</button>
+        <input type="file" id="importFile" accept=".csv,text/csv" hidden />
+        <div id="importPreview"></div>
       </div>
     `;
 
@@ -1284,7 +1287,169 @@
     $('#exportTo').value = exportTo;
   }
 
+  // ---- CSV import (reads files made by the Download CSV button) ----
+  let pendingImport = null;
+  const IMPORT_HEADER = ['Date','Time','Type','Item','Calories','Protein (g)','Cal per g Protein'];
+
+  function parseCsvText(text){
+    const rows = [];
+    let row = [], field = '', quoted = false;
+    for(let i = 0; i < text.length; i++){
+      const c = text[i];
+      if(quoted){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i++; }
+          else quoted = false;
+        } else field += c;
+      } else if(c === '"'){ quoted = true; }
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && text[i+1] === '\n') i++;
+        row.push(field); rows.push(row); row = []; field = '';
+      } else field += c;
+    }
+    if(field !== '' || row.length){ row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(x => String(x).trim() !== ''));
+  }
+  function unguardCell(s){
+    return String(s == null ? '' : s).replace(/^'(?=[=+\-@\t\r])/, '');
+  }
+  async function loadList(key){
+    try{
+      const r = await storage.get(key);
+      return (r && r.value) ? JSON.parse(r.value) : [];
+    }catch(e){ return []; }
+  }
+  function isoForRow(date, hhmm){
+    const [y, m, d] = date.split('-').map(Number);
+    const [hh, mm] = String(hhmm || '').split(':').map(Number);
+    return new Date(y, m-1, d, isNaN(hh) ? 12 : hh, isNaN(mm) ? 0 : mm).toISOString();
+  }
+  function newId(){
+    return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  }
+
+  async function importCsvFile(file){
+    const preview = $('#importPreview');
+    pendingImport = null;
+    let text = '';
+    try{ text = await file.text(); }
+    catch(e){ preview.innerHTML = '<div class="qty-hint">Couldn\'t read that file.</div>'; return; }
+
+    const rows = parseCsvText(text.replace(/^﻿/, ''));
+    const header = (rows[0] || []).map(h => String(h).trim());
+    if(IMPORT_HEADER.some((h, i) => header[i] !== h)){
+      preview.innerHTML = '<div class="qty-hint">That isn\'t a Ledger export. Use a CSV made with the Download CSV button.</div>';
+      return;
+    }
+
+    const plan = {};
+    let skipped = 0, bad = 0;
+    rows.slice(1).forEach(r => {
+      const date = String(r[0] || '').trim();
+      const time = String(r[1] || '').trim();
+      const type = String(r[2] || '').trim();
+      const item = unguardCell(r[3]);
+      const calories = parseFloat(r[4]);
+      const protein = parseFloat(r[5]);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ bad++; return; }
+      if(type === 'Day Total'){ skipped++; return; }
+      if(isNaN(calories) || (type !== 'Food' && type !== 'Exercise')){ bad++; return; }
+      const day = plan[date] || (plan[date] = {food: [], exercise: []});
+      if(type === 'Food'){
+        day.food.push({time, name: item, calories: fmt1(calories), protein: fmt1(isNaN(protein) ? 0 : protein)});
+      } else {
+        day.exercise.push({time, name: item, calories: fmt1(Math.abs(calories))});
+      }
+    });
+
+    // Skip rows that already exist on the same day (same time, item, calories and protein)
+    const keyOf = (t, n, c, p) => [t, n, c, p].join('|');
+    let addFood = 0, addEx = 0, dupes = 0;
+    for(const date of Object.keys(plan)){
+      const day = plan[date];
+      const haveFood = await loadList('entries:' + date);
+      const haveEx = await loadList('exercise:' + date);
+      const seenF = new Set(haveFood.map(e => keyOf(csvTime(e.time), e.name, fmt1(e.calories), fmt1(e.protein || 0))));
+      const seenE = new Set(haveEx.map(e => keyOf(csvTime(e.time), e.name, fmt1(e.calories), 0)));
+      day.food = day.food.filter(e => {
+        if(seenF.has(keyOf(e.time, e.name, e.calories, e.protein))){ dupes++; return false; }
+        return true;
+      });
+      day.exercise = day.exercise.filter(e => {
+        if(seenE.has(keyOf(e.time, e.name, e.calories, 0))){ dupes++; return false; }
+        return true;
+      });
+      addFood += day.food.length;
+      addEx += day.exercise.length;
+    }
+
+    const days = Object.keys(plan).filter(d => plan[d].food.length || plan[d].exercise.length).length;
+    const note = (bad ? ` ${bad} row${bad === 1 ? '' : 's'} couldn't be read.` : '') +
+                 (dupes ? ` ${dupes} already exist${dupes === 1 ? 's' : ''} and will be skipped.` : '');
+    if(!addFood && !addEx){
+      preview.innerHTML = `<div class="qty-hint">Nothing new to import.${note}</div>`;
+      return;
+    }
+    pendingImport = {plan, addFood, addEx};
+    preview.innerHTML = `
+      <div class="qty-hint" style="margin-top:10px;">Ready to import ${addFood} food and ${addEx} exercise entr${addFood + addEx === 1 ? 'y' : 'ies'} across ${days} day${days === 1 ? '' : 's'}.${note}</div>
+      <div class="form-btns">
+        <button class="cancel-btn" id="importCancel" type="button">Cancel</button>
+        <button class="save-btn" id="importConfirm" type="button">Import</button>
+      </div>`;
+    const okBtn = $('#importConfirm');
+    if(okBtn) okBtn.addEventListener('click', applyImport);
+    const noBtn = $('#importCancel');
+    if(noBtn) noBtn.addEventListener('click', () => { pendingImport = null; preview.innerHTML = ''; });
+  }
+
+  async function applyImport(){
+    if(!pendingImport) return;
+    const {plan} = pendingImport;
+    for(const date of Object.keys(plan)){
+      const day = plan[date];
+      if(!day.food.length && !day.exercise.length) continue;
+      const food = (await loadList('entries:' + date)).concat(day.food.map(e => ({
+        id: newId(), name: e.name, calories: e.calories, protein: e.protein, time: isoForRow(date, e.time)
+      })));
+      const ex = (await loadList('exercise:' + date)).concat(day.exercise.map(e => ({
+        id: newId(), name: e.name, calories: e.calories, time: isoForRow(date, e.time)
+      })));
+      await storage.set('entries:' + date, JSON.stringify(food));
+      await storage.set('exercise:' + date, JSON.stringify(ex));
+      if(food.length === 0 && ex.length === 0){
+        delete daySummaries[date];
+      } else {
+        daySummaries[date] = {
+          calories: fmt1(food.reduce((s, e) => s + (e.calories || 0), 0)),
+          protein: fmt1(food.reduce((s, e) => s + (e.protein || 0), 0)),
+          burned: fmt1(ex.reduce((s, e) => s + (e.calories || 0), 0))
+        };
+      }
+    }
+    await saveDaySummaries();
+    const n = pendingImport.addFood + pendingImport.addEx;
+    const touchedToday = Object.keys(plan).includes(fmtDateKey(currentDate));
+    pendingImport = null;
+    if(touchedToday){ await loadEntries(); await loadExerciseEntries(); }
+    showToast(`Imported ${n} entr${n === 1 ? 'y' : 'ies'}`);
+    render();
+  }
+
+  function wireImport(){
+    const b = $('#importBtn');
+    if(b) b.addEventListener('click', () => $('#importFile').click());
+    const f = $('#importFile');
+    if(f) f.addEventListener('change', e => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if(file) importCsvFile(file);
+    });
+  }
+
   function wireHistoryEvents(){
+    wireImport();
     $('#closeHistoryBtn').addEventListener('click', () => { view = 'log'; render(); });
     const exportBtn = $('#exportBtn');
     if(exportBtn){
